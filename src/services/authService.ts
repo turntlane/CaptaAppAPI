@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma, Role, User } from "@prisma/client";
 import prisma from "../models/database";
 import HttpError from "../utils/httpError";
 import {
@@ -32,21 +33,24 @@ interface SessionMetadata {
   userAgent?: string;
 }
 
-const sanitizeUser = <T extends { passwordHash: string }>(user: T) => {
+const sanitizeUser = <T extends { passwordHash: string }>(
+  user: T
+): Omit<T, "passwordHash"> => {
   const { passwordHash, ...rest } = user;
   return rest;
 };
 
-const buildAccessPayload = (user: { id: string; email: string; username: string }): AccessTokenPayload => ({
+const buildAccessPayload = (user: Pick<User, "id" | "email" | "username" | "role">): AccessTokenPayload => ({
   sub: user.id,
   email: user.email,
   username: user.username,
+  role: user.role,
 });
 
 const issueSession = async (
   userId: string,
   metadata: SessionMetadata,
-  tx = prisma
+  tx: Prisma.TransactionClient | typeof prisma = prisma
 ) => {
   const { token, tokenHash, expiresAt } = generateRefreshToken();
 
@@ -89,6 +93,7 @@ export const registerUser = async (
       age: input.age,
       avatarUrl: input.avatarUrl,
       friendsCount: input.friendsCount,
+      role: Role.USER,
     },
   });
 
@@ -104,7 +109,10 @@ export const registerUser = async (
   };
 };
 
-export const loginUser = async (input: LoginInput, metadata: SessionMetadata) => {
+export const loginUser = async (
+  input: LoginInput,
+  metadata: SessionMetadata
+) => {
   const user = await prisma.user.findUnique({
     where: { email: input.email },
   });
@@ -147,11 +155,19 @@ export const refreshSession = async (
       include: { user: true },
     });
 
-    if (
-      !existing ||
-      existing.revokedAt ||
-      existing.expiresAt.getTime() < Date.now()
-    ) {
+    if (!existing) {
+      throw new HttpError(401, "Invalid refresh token");
+    }
+
+    if (existing.revokedAt) {
+      console.warn(
+        "Refresh token reuse detected",
+        JSON.stringify({ tokenId: existing.id, userId: existing.userId })
+      );
+      throw new HttpError(401, "Invalid refresh token");
+    }
+
+    if (existing.expiresAt.getTime() < Date.now()) {
       throw new HttpError(401, "Invalid refresh token");
     }
 

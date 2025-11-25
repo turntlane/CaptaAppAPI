@@ -11,16 +11,18 @@ import {
   validateUpdateUser,
 } from "../middleware/validation";
 import authenticate from "../middleware/authenticate";
+import authorizeSelf from "../middleware/authorizeSelf";
+import requireAdmin from "../middleware/requireAdmin";
 
 const router = express.Router();
 
-router.use(authenticate);
+// router.use(authenticate);
 
 // User routes
-router.get("/", getAllUsers);
-router.get("/:id", getUserById);
-router.post("/", validateCreateUser, createUser);
-router.put("/:id", validateUpdateUser, updateUser);
-router.delete("/:id", deleteUser);
+router.get("/", /*requireAdmin,*/ getAllUsers);
+router.get("/:id", authorizeSelf, getUserById);
+router.post("/", requireAdmin, validateCreateUser, createUser);
+router.put("/:id", authorizeSelf, validateUpdateUser, updateUser);
+router.delete("/:id", authorizeSelf, deleteUser);
 
 export default router;

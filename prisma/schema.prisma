@@ -1,0 +1,52 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  username      String         @unique
+  passwordHash  String         @map("password_hash")
+  firstName     String         @map("first_name")
+  lastName      String         @map("last_name")
+  age           Int
+  friendsCount  Int            @default(0) @map("friends_count")
+  avatarUrl     String?        @map("avatar_url")
+  isActive      Boolean        @default(true) @map("is_active")
+  role          Role           @default(USER)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id           String    @id @default(cuid())
+  tokenHash    String    @map("token_hash")
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedById String?   @map("replaced_by_id")
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+
+  @@unique([tokenHash])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
