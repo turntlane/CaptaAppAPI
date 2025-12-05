@@ -25,6 +25,7 @@ model User {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   refreshTokens RefreshToken[]
+  sessions      Session[]
 
   @@map("users")
 }
@@ -49,4 +50,117 @@ model RefreshToken {
 enum Role {
   USER
   ADMIN
+}
+
+enum SessionType {
+  baseline
+  focus_aid
+}
+
+enum BandName {
+  phi
+  chi
+  psi
+}
+
+
+model Session {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  sessionType     SessionType @map("session_type")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  endedAt         DateTime?   @map("ended_at")
+  durationSeconds Decimal?    @db.Decimal(10, 2) @map("duration_seconds")
+  
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signalData              SignalData[]
+  focusAidSession         FocusAidSession?
+  baselineSession         BaselineSession?
+
+  @@index([userId], map: "idx_sessions_user")
+  @@index([sessionType], map: "idx_sessions_type")
+  @@index([createdAt], map: "idx_sessions_created")
+  @@map("sessions")
+}
+
+model SignalData {
+  id          BigInt   @id @default(autoincrement())
+  sessionId   String   @map("session_id")
+  channel     Int      @db.SmallInt
+  timestamp   BigInt
+  signalValue Decimal  @db.Decimal(12, 6) @map("signal_value")
+  
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId], map: "idx_signal_session")
+  @@index([timestamp], map: "idx_signal_timestamp")
+  @@index([sessionId, channel], map: "idx_signal_session_channel")
+  @@map("signal_data")
+}
+
+model FocusAidSession {
+  sessionId          String   @id @map("session_id")
+  difficultyLevel    Int?     @map("difficulty_level")
+  preSessionInfo     Json?    @map("pre_session_info")
+  postSessionFeedback Json?   @map("post_session_feedback")
+  
+  session            Session                    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  attentionScores    FocusAidAttentionScore[]
+  vibrations         FocusAidVibration[]
+
+  @@map("focus_aid_sessions")
+}
+
+model FocusAidAttentionScore {
+  id            BigInt   @id @default(autoincrement())
+  sessionId     String   @map("session_id")
+  timestamp     BigInt
+  attentionScore Decimal  @db.Decimal(5, 4) @map("attention_score")
+  isFocused     Boolean? @map("is_focused")
+  
+  session FocusAidSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId], map: "idx_attention_session")
+  @@index([timestamp], map: "idx_attention_timestamp")
+  @@map("focus_aid_attention_scores")
+}
+
+model FocusAidVibration {
+  id        BigInt @id @default(autoincrement())
+  sessionId String @map("session_id")
+  timestamp BigInt
+  
+  session FocusAidSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId], map: "idx_vibrations_session")
+  @@map("focus_aid_vibrations")
+}
+
+model BaselineSession {
+  sessionId         String  @id @map("session_id")
+  focusedStartTime  BigInt? @map("focused_start_time")
+  focusedEndTime    BigInt? @map("focused_end_time")
+  relaxedStartTime BigInt? @map("relaxed_start_time")
+  relaxedEndTime   BigInt? @map("relaxed_end_time")
+  
+  session        Session                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  frequencyBands BaselineFrequencyBand[]
+
+  @@map("baseline_sessions")
+}
+
+model BaselineFrequencyBand {
+  id        BigInt   @id @default(autoincrement())
+  sessionId String   @map("session_id")
+  bandName  BandName @map("band_name")
+  freqStart Decimal? @db.Decimal(8, 4) @map("freq_start")
+  freqEnd   Decimal? @db.Decimal(8, 4) @map("freq_end")
+  powerAvg  Decimal? @db.Decimal(12, 6) @map("power_avg")
+  powerSign Int?     @map("power_sign") // -1, 0, or 1
+  
+  session BaselineSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId], map: "idx_bands_session")
+  @@index([bandName], map: "idx_bands_name")
+  @@map("baseline_frequency_bands")
 }
